@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Daily Planner</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="theme-color" content="#0f1115" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <h1>Ежедневник</h1>
+      <div class="date-controls">
+        <button id="prev-day" class="icon-button" aria-label="Предыдущий день">◀</button>
+        <input type="date" id="current-date" />
+        <button id="next-day" class="icon-button" aria-label="Следующий день">▶</button>
+      </div>
+    </div>
+    <button id="notify-toggle" class="primary">Уведомления</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="day">День</button>
+    <button class="tab" data-tab="week">Неделя</button>
+    <button class="tab" data-tab="month">Месяц</button>
+    <button class="tab" data-tab="year">Год</button>
+  </nav>
+
+  <main>
+    <section id="tab-day" class="tab-panel active">
+      <div class="card">
+        <label class="field">
+          Старт дня
+          <input type="time" id="day-start" value="08:00" />
+        </label>
+        <div class="template-actions">
+          <select id="template-select"></select>
+          <button id="apply-template" class="secondary">Применить</button>
+          <button id="save-template" class="secondary">Сохранить как шаблон</button>
+          <button id="delete-template" class="danger">Удалить шаблон</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Добавить задачу</h2>
+        <div class="task-form">
+          <input type="text" id="task-title" placeholder="Название" />
+          <select id="task-quadrant">
+            <option value="Q1">Q1 Срочно/Важно</option>
+            <option value="Q2">Q2 Важно/Не срочно</option>
+            <option value="Q3">Q3 Срочно/Не важно</option>
+            <option value="Q4">Q4 Не срочно/Не важно</option>
+          </select>
+          <input type="number" id="task-duration" min="5" step="5" value="30" />
+          <button id="add-task" class="primary">Добавить</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>План дня</h2>
+        <div id="task-list" class="task-list"></div>
+      </div>
+    </section>
+
+    <section id="tab-week" class="tab-panel">
+      <div class="card">
+        <h2>Неделя</h2>
+        <div id="week-view" class="grid-week"></div>
+      </div>
+    </section>
+
+    <section id="tab-month" class="tab-panel">
+      <div class="card">
+        <h2>Месяц</h2>
+        <div id="month-view" class="grid-month"></div>
+      </div>
+    </section>
+
+    <section id="tab-year" class="tab-panel">
+      <div class="card">
+        <h2>Год</h2>
+        <div id="year-view" class="grid-year"></div>
+      </div>
+    </section>
+  </main>
+
+  <template id="task-item-template">
+    <div class="task-item">
+      <div>
+        <div class="task-title"></div>
+        <div class="task-meta"></div>
+      </div>
+      <div class="task-actions">
+        <button class="secondary toggle-done">Готово</button>
+        <button class="secondary move-tomorrow">На завтра</button>
+        <button class="danger delete-task">Удалить</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

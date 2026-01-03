@@ -1,0 +1,281 @@
+index.html
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ежедневник Кирилла</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:#0b1220;color:#e6edf7}
+    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    .card{background:#121b2e;border:1px solid #26324c;border-radius:18px;padding:14px;margin:12px 0}
+    input,select,button,textarea{border-radius:12px;border:1px solid #2a3a5a;background:#0b1220;color:#e6edf7;padding:10px}
+    button{cursor:pointer}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .col{flex:1;min-width:240px}
+    .pill{padding:6px 10px;border:1px solid #2a3a5a;border-radius:999px;font-size:13px}
+    .q1{background:#2b0f14;border-color:#6b2632}
+    .q2{background:#2b1c0f;border-color:#6b4a26}
+    .q3{background:#2b2a0f;border-color:#6b6726}
+    .q4{background:#141a26;border-color:#2a3a5a}
+    .task{display:flex;gap:10px;align-items:flex-start;border:1px solid #26324c;background:#0b1220;border-radius:16px;padding:12px}
+    .muted{color:#a8b3c7}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
+    .danger{color:#ff9aa5}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h2 style="margin:8px 0 0">Ежедневник Кирилла</h2>
+  <div class="muted" style="margin:6px 0 10px">Сначала 🔴, потом 🟠. 🟡 — лимит. ⚪ — режем первым.</div>
+
+  <div class="card">
+    <div class="row">
+      <div class="col">
+        <div class="muted">Дата</div>
+        <div class="mono" id="dateKey"></div>
+      </div>
+      <div class="col">
+        <div class="muted">Старт дня</div>
+        <div class="row">
+          <input id="startTime" placeholder="16:08" style="width:120px" />
+          <button id="btnNow">Сейчас</button>
+        </div>
+      </div>
+      <div class="col">
+        <div class="muted">Выполнено</div>
+        <div><b id="doneCnt">0</b> / <span id="totalCnt">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700;margin-bottom:10px">Добавить задачу</div>
+    <div class="row">
+      <input id="tTitle" class="col" placeholder="Напр.: АТИ — 10 откликов" />
+      <select id="tQuad">
+        <option value="Q1">🔴 Важно+срочно</option>
+        <option value="Q2" selected>🟠 Важно, не срочно</option>
+        <option value="Q3">🟡 Срочно, не критично</option>
+        <option value="Q4">⚪ Не важно</option>
+      </select>
+      <input id="tMin" type="number" value="30" min="5" step="5" style="width:110px" />
+      <button id="btnAdd">Добавить</button>
+    </div>
+    <textarea id="tNotes" placeholder="Заметка (необязательно)" style="width:100%;margin-top:10px;min-height:70px"></textarea>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:700">Задачи</div>
+      <div class="row">
+        <button id="tplAnchors">Шаблон: Якоря</button>
+        <button id="tplFloors">Шаблон: Полы+стирка</button>
+        <button id="btnClear">Очистить день</button>
+      </div>
+    </div>
+    <div id="tasks"></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700">Тайминг (авто по Q1→Q4)</div>
+    <div id="schedErr" class="danger" style="margin-top:8px;display:none"></div>
+    <div id="schedule"></div>
+  </div>
+</div>
+
+<script>
+  const LS_KEY = "kirill_planner_static_v1";
+  const ORDER = {Q1:1,Q2:2,Q3:3,Q4:4};
+
+  const pad2 = n => String(n).padStart(2,"0");
+  const todayKey = () => {
+    const d=new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  };
+  const nowHHMM = () => {
+    const d=new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  };
+  const parseHHMM = (s) => {
+    const raw=String(s||"").trim().replace(".",":");
+    const p=raw.split(":"); if(p.length!==2) return null;
+    const hh=Number(p[0]), mm=Number(p[1]);
+    if(!Number.isFinite(hh)||!Number.isFinite(mm)||hh<0||hh>23||mm<0||mm>59) return null;
+    return hh*60+mm;
+  };
+  const fmtHHMM = m => `${pad2(Math.floor(m/60)%24)}:${pad2(m%60)}`;
+
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(LS_KEY)||""); }catch{ return null; }
+  }
+  function save(s){ localStorage.setItem(LS_KEY, JSON.stringify(s)); }
+
+  function ensureState(s){
+    const key=todayKey();
+    if(!s) s={dateKey:key,startTime:nowHHMM(),tasks:[]};
+    if(!s.dateKey) s.dateKey=key;
+    if(!s.startTime) s.startTime=nowHHMM();
+    if(!Array.isArray(s.tasks)) s.tasks=[];
+    return s;
+  }
+
+  let state = ensureState(load());
+
+  const elDate = document.getElementById("dateKey");
+  const elStart = document.getElementById("startTime");
+  const elTasks = document.getElementById("tasks");
+  const elDone = document.getElementById("doneCnt");
+  const elTotal = document.getElementById("totalCnt");
+  const elSchedule = document.getElementById("schedule");
+  const elErr = document.getElementById("schedErr");
+
+  function qClass(q){ return q==="Q1"?"q1":q==="Q2"?"q2":q==="Q3"?"q3":"q4"; }
+  function qLabel(q){
+    return q==="Q1"?"🔴 Важно+срочно":q==="Q2"?"🟠 Важно, не срочно":q==="Q3"?"🟡 Срочно, не критично":"⚪ Не важно";
+  }
+
+  function render(){
+    elDate.textContent = state.dateKey;
+    elStart.value = state.startTime;
+
+    const doneCnt = state.tasks.filter(t=>t.done).length;
+    elDone.textContent = doneCnt;
+    elTotal.textContent = state.tasks.length;
+
+    elTasks.innerHTML = "";
+    if(state.tasks.length===0){
+      elTasks.innerHTML = `<div class="muted" style="margin-top:10px">Нет задач. Добавь первую.</div>`;
+    } else {
+      state.tasks
+        .slice()
+        .sort((a,b)=>(ORDER[a.q]??9)-(ORDER[b.q]??9))
+        .forEach(t=>{
+          const div=document.createElement("div");
+          div.className="task";
+          div.style.marginTop="10px";
+          div.innerHTML = `
+            <input type="checkbox" ${t.done?"checked":""} />
+            <div style="flex:1">
+              <div class="row" style="justify-content:space-between">
+                <div style="font-weight:700">${escapeHtml(t.title)}</div>
+                <div class="mono muted">${t.minutes} мин</div>
+              </div>
+              <div class="row" style="margin-top:6px">
+                <span class="pill ${qClass(t.q)}">${qLabel(t.q)}</span>
+              </div>
+              ${t.notes?`<div class="muted" style="margin-top:6px">${escapeHtml(t.notes)}</div>`:""}
+              <div class="row" style="margin-top:10px">
+                <button data-act="tomorrow">На завтра</button>
+                <button data-act="del">Удалить</button>
+              </div>
+            </div>
+          `;
+          const cb=div.querySelector("input[type=checkbox]");
+          cb.addEventListener("change", ()=>{
+            t.done = cb.checked; save(state); render();
+          });
+          div.querySelector("[data-act=del]").addEventListener("click", ()=>{
+            state.tasks = state.tasks.filter(x=>x.id!==t.id); save(state); render();
+          });
+          div.querySelector("[data-act=tomorrow]").addEventListener("click", ()=>{
+            // просто помечаем как "перенесено" (для статической версии)
+            t.done = true;
+            t.notes = (t.notes? t.notes+" | " : "") + "Перенести на завтра";
+            save(state); render();
+          });
+          elTasks.appendChild(div);
+        });
+    }
+
+    // schedule
+    const startMin = parseHHMM(state.startTime);
+    elErr.style.display="none";
+    elSchedule.innerHTML="";
+    if(startMin==null){
+      elErr.textContent="Некорректное время старта. Пример: 16:08";
+      elErr.style.display="block";
+      return;
+    }
+    const active = state.tasks.filter(t=>!t.done).slice().sort((a,b)=>(ORDER[a.q]??9)-(ORDER[b.q]??9));
+    if(active.length===0){
+      elSchedule.innerHTML = `<div class="muted" style="margin-top:10px">Все задачи выполнены или задач нет.</div>`;
+      return;
+    }
+    let t = startMin;
+    active.forEach(it=>{
+      const from=t;
+      const dur=Math.max(5, Number(it.minutes)||5);
+      const to=from+dur; t=to;
+      const row=document.createElement("div");
+      row.className="task";
+      row.style.marginTop="10px";
+      row.innerHTML = `
+        <div class="mono" style="min-width:120px">${fmtHHMM(from)}–${fmtHHMM(to)}</div>
+        <div style="flex:1">
+          <div class="row">
+            <span class="pill ${qClass(it.q)}">${qLabel(it.q)}</span>
+            <div style="font-weight:700">${escapeHtml(it.title)}</div>
+          </div>
+          ${it.notes?`<div class="muted" style="margin-top:6px">${escapeHtml(it.notes)}</div>`:""}
+        </div>
+        <button>Сделал ✔</button>
+      `;
+      row.querySelector("button").addEventListener("click", ()=>{
+        it.done=true; save(state); render();
+      });
+      elSchedule.appendChild(row);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  document.getElementById("btnNow").addEventListener("click", ()=>{
+    state.startTime = nowHHMM(); save(state); render();
+  });
+  elStart.addEventListener("change", ()=>{
+    state.startTime = elStart.value; save(state); render();
+  });
+
+  document.getElementById("btnAdd").addEventListener("click", ()=>{
+    const title=document.getElementById("tTitle").value.trim();
+    if(!title) return;
+    const q=document.getElementById("tQuad").value;
+    const minutes=Math.max(5, Number(document.getElementById("tMin").value)||5);
+    const notes=document.getElementById("tNotes").value.trim();
+    state.tasks.unshift({id:Math.random().toString(36).slice(2), title, q, minutes, notes, done:false});
+    document.getElementById("tTitle").value="";
+    document.getElementById("tNotes").value="";
+    save(state); render();
+  });
+
+  document.getElementById("btnClear").addEventListener("click", ()=>{
+    if(confirm("Очистить все задачи дня?")){
+      state.tasks=[]; save(state); render();
+    }
+  });
+
+  // templates
+  document.getElementById("tplAnchors").addEventListener("click", ()=>{
+    const tpl=[
+      {title:"Еда",q:"Q1",minutes:30,notes:"Белок+овощи"},
+      {title:"Тренировка",q:"Q2",minutes:40,notes:"Круг×3"},
+      {title:"Уборка (1 зона)",q:"Q2",minutes:30,notes:"30 минут без фанатизма"},
+    ];
+    tpl.reverse().forEach(t=>state.tasks.unshift({id:Math.random().toString(36).slice(2),...t,done:false}));
+    save(state); render();
+  });
+
+  document.getElementById("tplFloors").addEventListener("click", ()=>{
+    const tpl=[
+      {title:"Полы — вся квартира",q:"Q1",minutes:90,notes:"Пылесос → влажная"},
+      {title:"Стирка (1–2 загрузки)",q:"Q1",minutes:60,notes:"Запуск → развесить"},
+    ];
+    tpl.reverse().forEach(t=>state.tasks.unshift({id:Math.random().toString(36).slice(2),...t,done:false}));
+    save(state); render();
+  });
+
+  render();
+</script>
+</body>
+</html>
